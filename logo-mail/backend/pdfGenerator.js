@@ -1,38 +1,33 @@
 /**
- * Mweb Account Verification PDF Generator
+ * mwebAccount Verification PDF Generator
  * Generates professional verification PDFs in memory using PDFKit
  * No files are saved to disk - everything is streamed directly
- * 
- * PDFKit v0.19+ includes built-in roundedRect() method
- * Link annotations use doc.link() for clickable areas
+ *
+ * Card height is computed from actual content instead of a fixed
+ * page-height guess — this is what guarantees the document always
+ * renders on a single A4 page regardless of email length, etc.
  */
 
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 
 /**
- * Color palette matching Mweb brand exactly
+ * Color palette matching mwebbrand exactly (unchanged)
  */
 const COLORS = {
-  primary: '#0066CC',       // Mweb blue button
-  primaryDark: '#004499',   // Hover state
-  textDark: '#1A1A1A',     // Headings
-  textMedium: '#444444',    // Subheadings
-  textLight: '#666666',     // Body text
-  textMuted: '#888888',     // Hints, footer
-  border: '#E8E8E8',      // Card border, dividers
-  bgLight: '#F8F9FA',       // Notice box background
-  bgCard: '#FAFAFA',        // QR section background
+  primary: '#0066CC',
+  primaryDark: '#004499',
+  textDark: '#1A1A1A',
+  textMedium: '#444444',
+  textLight: '#666666',
+  textMuted: '#888888',
+  border: '#E8E8E8',
+  bgLight: '#F8F9FA',
+  bgCard: '#FAFAFA',
   white: '#FFFFFF',
-  red: '#C53030',           // Warning text
+  red: '#C53030',
 };
 
-/**
- * Convert hex color to PDFKit-compatible array [r, g, b]
- * PDFKit expects values between 0 and 1
- * @param {string} hex - Hex color string (e.g., '#0066CC')
- * @returns {number[]} - [r, g, b] array with values 0-1
- */
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? [
@@ -42,20 +37,12 @@ function hexToRgb(hex) {
   ] : [0, 0, 0];
 }
 
-/**
- * Generate QR code as a PNG buffer
- * @param {string} url - The URL to encode in the QR code
- * @returns {Promise<Buffer>} - PNG buffer
- */
 async function generateQRCode(url) {
   try {
     return await QRCode.toBuffer(url, {
       width: 300,
       margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF',
-      },
+      color: { dark: '#000000', light: '#FFFFFF' },
       type: 'png',
     });
   } catch (error) {
@@ -64,425 +51,261 @@ async function generateQRCode(url) {
   }
 }
 
-/**
- * Draw a rounded rectangle using PDFKit's built-in roundedRect (v0.19+)
- * Falls back to manual path drawing for older versions
- * @param {PDFDocument} doc - PDFKit document
- * @param {number} x - X position
- * @param {number} y - Y position
- * @param {number} width - Width
- * @param {number} height - Height
- * @param {number} radius - Corner radius
- * @param {string} fillColor - Fill hex color (optional)
- * @param {string} strokeColor - Stroke hex color (optional)
- */
-function drawRoundedRect(doc, x, y, width, height, radius, fillColor = null, strokeColor = null) {
-  // PDFKit v0.19+ has built-in roundedRect
-  if (doc.roundedRect) {
-    doc.save();
-    if (fillColor) {
-      doc.fillColor(fillColor);
-    }
-    if (strokeColor) {
-      doc.strokeColor(strokeColor).lineWidth(1);
-    }
-
-    doc.roundedRect(x, y, width, height, radius);
-
-    if (fillColor && strokeColor) {
-      doc.fillAndStroke();
-    } else if (fillColor) {
-      doc.fill();
-    } else if (strokeColor) {
-      doc.stroke();
-    }
-    doc.restore();
-  } else {
-    // Fallback for older PDFKit versions - manual path drawing
-    doc.save();
-
-    doc.moveTo(x + radius, y);
-    doc.lineTo(x + width - radius, y);
-    doc.quadraticCurveTo(x + width, y, x + width, y + radius);
-    doc.lineTo(x + width, y + height - radius);
-    doc.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    doc.lineTo(x + radius, y + height);
-    doc.quadraticCurveTo(x, y + height, x, y + height - radius);
-    doc.lineTo(x, y + radius);
-    doc.quadraticCurveTo(x, y, x + radius, y);
-    doc.closePath();
-
-    if (fillColor) {
-      doc.fill(fillColor);
-    }
-    if (strokeColor) {
-      doc.stroke(strokeColor);
-    }
-
-    doc.restore();
-  }
-}
-
-/**
- * Draw a horizontal line
- * @param {PDFDocument} doc - PDFKit document
- * @param {number} x1 - Start X
- * @param {number} y - Y position
- * @param {number} x2 - End X
- * @param {string} color - Hex color
- */
-function drawLine(doc, x1, y, x2, color) {
+/** Fully rounded rectangle (all four corners) */
+function drawRoundedRect(doc, x, y, width, height, radius, fillColor = null, strokeColor = null, lineWidth = 1) {
   doc.save();
-  doc.moveTo(x1, y)
-     .lineTo(x2, y)
-     .strokeColor(color)
-     .lineWidth(1)
-     .stroke();
+  if (fillColor) doc.fillColor(fillColor);
+  if (strokeColor) doc.strokeColor(strokeColor).lineWidth(lineWidth);
+  doc.roundedRect(x, y, width, height, radius);
+  if (fillColor && strokeColor) doc.fillAndStroke();
+  else if (fillColor) doc.fill();
+  else if (strokeColor) doc.stroke();
   doc.restore();
 }
 
-/**
- * Generate the Mweb Account Verification PDF
- * Replicates the uploaded PDF design exactly
- * 
- * @param {string} email - User's email address
- * @param {string} verifyUrl - The verification URL for button and QR
- * @returns {Promise<Buffer>} - PDF as buffer
- */
+/** Rectangle rounded on the TOP two corners only, square bottom —
+ *  used for the header bar sitting flush against the card body below it. */
+function drawTopRoundedRect(doc, x, y, width, height, radius, fillColor) {
+  doc.save();
+  doc.moveTo(x, y + height);
+  doc.lineTo(x, y + radius);
+  doc.quadraticCurveTo(x, y, x + radius, y);
+  doc.lineTo(x + width - radius, y);
+  doc.quadraticCurveTo(x + width, y, x + width, y + radius);
+  doc.lineTo(x + width, y + height);
+  doc.closePath();
+  doc.fillColor(fillColor).fill();
+  doc.restore();
+}       
+
+function drawLine(doc, x1, y, x2, color, lineWidth = 1) {
+  doc.save();
+  doc.moveTo(x1, y).lineTo(x2, y).strokeColor(color).lineWidth(lineWidth).stroke();
+  doc.restore();
+}
+
+function drawDashedLine(doc, x1, y, x2, color) {
+  doc.save();
+  doc.dash(2, { space: 2 });
+  doc.moveTo(x1, y).lineTo(x2, y).strokeColor(color).lineWidth(1).stroke();
+  doc.undash();
+  doc.restore();
+}
+
+/** Small rounded "pill" badge, sized to fit its text */
+function drawPill(doc, x, y, text, fontSize, textColor, bgColor) {
+  doc.font('Helvetica-Bold').fontSize(fontSize);
+  const textWidth = doc.widthOfString(text);
+  const padX = 10;
+  const height = fontSize + 10;
+  const width = textWidth + padX * 2;
+  drawRoundedRect(doc, x, y, width, height, height / 2, bgColor, null);
+  doc.fillColor(textColor).text(text, x + padX, y + (height - fontSize) / 2 - 1);
+  return { width, height };
+}
+
 async function generateVerificationPDF(email, verifyUrl) {
   return new Promise(async (resolve, reject) => {
     try {
-      // ============================================================
-      // 1. CREATE PDF DOCUMENT (A4 size, no margins)
-      // ============================================================
-      const doc = new PDFDocument({
-        size: 'A4',
-        margin: 0,
-        bufferPages: true,
-      });
-
+      const doc = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true });
       const chunks = [];
-
-      // Collect PDF data chunks into buffer (no disk writes)
       doc.on('data', (chunk) => chunks.push(chunk));
-      doc.on('end', () => {
-        const pdfBuffer = Buffer.concat(chunks);
-        resolve(pdfBuffer);
-      });
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', (err) => reject(err));
 
-      // ============================================================
-      // 2. PAGE SETUP & DIMENSIONS
-      // ============================================================
-      const pageWidth = doc.page.width;   // 595.28 points (A4)
-      const pageHeight = doc.page.height;   // 841.89 points (A4)
-
-      // Card dimensions: centered, max width ~520px (185mm converted to points)
-      // 1mm = 2.83465 points
-      const cardWidth = 185 * 2.83465;      // ~524 points
-      const cardHeight = pageHeight - 160;  // Leave margins top/bottom
+      const pageWidth = doc.page.width;
+      const cardWidth = 185 * 2.83465; // ~524pt, same as before
       const cardX = (pageWidth - cardWidth) / 2;
-      let currentY = 80;                     // Top margin
+      const cardY = 36;
+      const padX = 28;
+      const contentX = cardX + padX;
+      const contentWidth = cardWidth - padX * 2;
 
       // ============================================================
-      // 3. CARD BACKGROUND (White with light border)
+      // FIXED SECTION HEIGHTS — these constants are used BOTH to
+      // compute the card's total height up front AND as the actual
+      // drawing increments below, so the two can never drift apart.
       // ============================================================
-      drawRoundedRect(
-        doc,
-        cardX,
-        currentY,
-        cardWidth,
-        cardHeight,
-        12,                    // Corner radius
-        COLORS.white,          // Fill
-        COLORS.border            // Stroke
-      );
+      const HEADER_H = 50;
+      const TOP_PAD = 26;
+      const TITLE_H = 28;
+      const GAP_1 = 10;
+      const SUBTITLE_H = 16;
+      const GAP_2 = 14;
+      const PARA_H = 15;
+      const GAP_3 = 18;
+      const DETAILS_BOX_H = 128;
+      const GAP_4 = 20;
+      const BUTTON_H = 48;
+      const GAP_5 = 18;
+      const QR_TOP_PAD = 16;
+      const QR_SIZE = 138;
+      const QR_LABEL_GAP = 16;
+      const QR_LABEL_BLOCK_H = 48; // heading + 2 supporting lines
+      const QR_BOTTOM_PAD = 16;
+      const QR_SECTION_H = QR_TOP_PAD + QR_SIZE + QR_LABEL_GAP + QR_LABEL_BLOCK_H + QR_BOTTOM_PAD;
+      const GAP_6 = 18;
+      const WARNING_H = 36;
+      const GAP_7 = 20;
+      const FOOTER_H = 48;
+      const BOTTOM_PAD = 22;
 
-      // ============================================================
-      // 4. HEADER SECTION
-      // ============================================================
-      const headerY = currentY + 24;
-      const headerX = cardX + 28;
-
-      // "Mweb" - bold, dark
-      doc.font('Helvetica-Bold')
-         .fontSize(20)
-         .fillColor(COLORS.textDark)
-         .text('Mweb', headerX, headerY);
-
-      const mwebWidth = doc.widthOfString('Mweb');
-
-      // "·" - separator, gray
-      doc.font('Helvetica')
-         .fontSize(20)
-         .fillColor('#888888')
-         .text('·', headerX + mwebWidth + 4, headerY);
-
-      const dotWidth = doc.widthOfString('·');
-
-      // "Account Verification" - regular weight, medium gray
-      doc.font('Helvetica')
-         .fontSize(20)
-         .fillColor(COLORS.textMedium)
-         .text('Account Verification', headerX + mwebWidth + dotWidth + 8, headerY);
-
-      // Header bottom divider line
-      drawLine(doc, cardX + 28, headerY + 32, cardX + cardWidth - 28, COLORS.border);
+      const cardHeight =
+        HEADER_H + TOP_PAD +
+        TITLE_H + GAP_1 +
+        SUBTITLE_H + GAP_2 +
+        PARA_H + GAP_3 +
+        DETAILS_BOX_H + GAP_4 +
+        BUTTON_H + GAP_5 +
+        QR_SECTION_H + GAP_6 +
+        WARNING_H + GAP_7 +
+        FOOTER_H + BOTTOM_PAD;
 
       // ============================================================
-      // 5. CONTENT AREA
+      // CARD SHELL
       // ============================================================
-      let contentY = headerY + 56;
-      const contentX = cardX + 28;
-      const contentWidth = cardWidth - 56;  // 28px padding each side
+      drawRoundedRect(doc, cardX, cardY, cardWidth, cardHeight, 14, COLORS.white, COLORS.border);
+      drawTopRoundedRect(doc, cardX, cardY, cardWidth, HEADER_H, 14, COLORS.primary);
 
-      // --- Heading: "Verify your account" ---
-      doc.font('Helvetica-Bold')
-         .fontSize(26)
-         .fillColor(COLORS.textDark)
-         .text('Verify your account', contentX, contentY);
+      // Header text — white, on the solid primary bar
+      const headerTextY = cardY + (HEADER_H - 15) / 2 - 1;
+      doc.font('Helvetica-Bold').fontSize(15).fillColor(COLORS.white).text('mweb', contentX, headerTextY);
+      const mwebWidth = doc.widthOfString('mweb');
+      doc.font('Helvetica-Bold').fontSize(15).text(' ·Account Verification', contentX + mwebWidth, headerTextY);
 
-      contentY += 36;
-
-      // --- Subtitle ---
-      doc.font('Helvetica')
-         .fontSize(13)
-         .fillColor(COLORS.textLight)
-         .text('Complete your email verification to access your account', contentX, contentY);
-
-      contentY += 32;
+      let y = cardY + HEADER_H + TOP_PAD;
 
       // ============================================================
-      // 6. NOTICE BOX (Light gray with blue left accent)
+      // TITLE
       // ============================================================
-      const noticeHeight = 50;
+      doc.font('Helvetica-Bold').fontSize(22).fillColor(COLORS.textDark).text('Verify your account', contentX, y);
+      y += TITLE_H + GAP_1;
 
-      // Background
-      drawRoundedRect(
-        doc,
-        contentX,
-        contentY,
-        contentWidth,
-        noticeHeight,
-        8,
-        COLORS.bgLight,
-        null
-      );
-
-      // Blue left accent bar (3px wide)
+      // ============================================================
+      // SUBTITLE — thin left accent bar + text, blockquote-style
+      // ============================================================
       doc.save();
-      doc.moveTo(contentX, contentY + 4)
-         .lineTo(contentX, contentY + noticeHeight - 4)
-         .strokeColor(COLORS.primary)
-         .lineWidth(3)
-         .stroke();
+      doc.roundedRect(contentX, y + 1, 2.5, SUBTITLE_H - 2, 1.25).fillColor(COLORS.primary).fill();
       doc.restore();
-
-      // Notice text
-      doc.font('Helvetica')
-         .fontSize(12)
-         .fillColor(COLORS.textMedium)
-         .text(
-           'Please complete the verification to continue using your account',
-           contentX + 16,
-           contentY + 16,
-           { width: contentWidth - 32 }
-         );
-
-      contentY += noticeHeight + 24;
+      doc.font('Helvetica').fontSize(11).fillColor(COLORS.textMedium)
+        .text('Complete your email verification to access your account', contentX + 12, y + 1);
+      y += SUBTITLE_H + GAP_2;
 
       // ============================================================
-      // 7. EMAIL ADDRESS DISPLAY
+      // PARAGRAPH
       // ============================================================
-      doc.font('Helvetica')
-         .fontSize(12)
-         .fillColor(COLORS.textLight)
-         .text('Email Address:', contentX, contentY);
-
-      contentY += 22;
-
-      // Actual email value - bold, dark
-      doc.font('Helvetica-Bold')
-         .fontSize(14)
-         .fillColor(COLORS.textDark)
-         .text(email, contentX, contentY);
-
-      // Underline beneath email
-      const emailWidth = doc.widthOfString(email);
-      drawLine(doc, contentX, contentY + 20, contentX + Math.max(emailWidth, 200), COLORS.border);
-
-      contentY += 36;
+      doc.font('Helvetica').fontSize(11).fillColor(COLORS.textLight)
+        .text('Please complete the verification to continue using your account.', contentX, y, {
+          width: contentWidth,
+        });
+      y += PARA_H + GAP_3;
 
       // ============================================================
-      // 8. VERIFICATION HINT TEXT
+      // ACCOUNT DETAILS BOX
       // ============================================================
-      doc.font('Helvetica')
-         .fontSize(11)
-         .fillColor(COLORS.textMuted)
-         .text(
-           'Verification is required once to confirm ownership of this email',
-           contentX,
-           contentY,
-           { width: contentWidth }
-         );
+      const boxY = y;
+      drawRoundedRect(doc, contentX, boxY, contentWidth, DETAILS_BOX_H, 10, COLORS.bgLight, null);
 
-      contentY += 32;
+      const boxPad = 16;
+      let by = boxY + 14;
+
+      drawPill(doc, contentX + boxPad, by, 'ACCOUNT DETAILS', 8.5, COLORS.textMedium, '#EDEFF1');
+      by += 28;
+
+      // Inline "Email Address: value"
+      doc.font('Helvetica').fontSize(10.5).fillColor(COLORS.textLight).text('Email Address: ', contentX + boxPad, by);
+      const labelWidth = doc.widthOfString('Email Address: ');
+      doc.font('Helvetica-Bold').fontSize(11.5).fillColor(COLORS.textDark)
+        .text(email, contentX + boxPad + labelWidth, by - 1);
+      by += 22;
+
+      drawDashedLine(doc, contentX + boxPad, by, contentX + contentWidth - boxPad, COLORS.border);
+      by += 12;
+
+      // Nested verification-note strip
+      const noteText = 'Verification is required once to confirm ownership of this email address.';
+      const noteBoxH = 30;
+      drawRoundedRect(doc, contentX + boxPad, by, contentWidth - boxPad * 2, noteBoxH, 6, COLORS.white, COLORS.border);
+      doc.save();
+      doc.roundedRect(contentX + boxPad, by + 5, 2.5, noteBoxH - 10, 1.25).fillColor(COLORS.textMuted).fill();
+      doc.restore();
+      doc.font('Helvetica').fontSize(9.5).fillColor(COLORS.textLight)
+        .text(noteText, contentX + boxPad + 14, by + (noteBoxH - 12) / 2, {
+          width: contentWidth - boxPad * 2 - 24,
+        });
+
+      y = boxY + DETAILS_BOX_H + GAP_4;
 
       // ============================================================
-      // 9. VERIFY BUTTON (Blue, clickable)
+      // VERIFY BUTTON
       // ============================================================
-      const buttonHeight = 48;
-      const buttonRadius = 8;
-
-      // Button background
-      drawRoundedRect(
-        doc,
-        contentX,
-        contentY,
-        contentWidth,
-        buttonHeight,
-        buttonRadius,
-        COLORS.primary,
-        null
+      drawRoundedRect(doc, contentX, y, contentWidth, BUTTON_H, 8, COLORS.primary, null);
+      const buttonText = 'Verify mweb Account Here';
+      doc.font('Helvetica-Bold').fontSize(13);
+      const buttonTextWidth = doc.widthOfString(buttonText);
+      doc.fillColor(COLORS.white).text(
+        buttonText,
+        contentX + (contentWidth - buttonTextWidth) / 2,
+        y + (BUTTON_H - 13) / 2 - 1
       );
-
-      // Button text - centered
-      const buttonText = 'Verify Mweb Account Here';
-      const buttonTextWidth = doc.font('Helvetica-Bold')
-                                  .fontSize(14)
-                                  .widthOfString(buttonText);
-      const buttonTextX = contentX + (contentWidth - buttonTextWidth) / 2;
-
-      doc.fillColor(COLORS.white)
-         .text(buttonText, buttonTextX, contentY + 16);
-
-      // --- CLICKABLE LINK ANNOTATION ---
-      // Must be added AFTER drawing the button content
-      // Rectangle covers the entire button area
-      doc.link(
-        contentX,
-        contentY,
-        contentWidth,
-        buttonHeight,
-        verifyUrl
-      );
-
-      contentY += buttonHeight + 28;
+      doc.link(contentX, y, contentWidth, BUTTON_H, verifyUrl);
+      y += BUTTON_H + GAP_5;
 
       // ============================================================
-      // 10. QR CODE SECTION
+      // QR SECTION
       // ============================================================
-      const qrSectionHeight = 280;
+      const qrSectionY = y;
+      drawRoundedRect(doc, contentX, qrSectionY, contentWidth, QR_SECTION_H, 10, COLORS.bgCard, null);
 
-      // Light gray background
-      drawRoundedRect(
-        doc,
-        contentX,
-        contentY,
-        contentWidth,
-        qrSectionHeight,
-        12,
-        COLORS.bgCard,
-        null
-      );
+      doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.textDark)
+        .text('Scan to Verify', contentX, qrSectionY + 14, { width: contentWidth, align: 'center' });
 
-      // Generate QR code dynamically
       const qrBuffer = await generateQRCode(verifyUrl);
+      const qrX = contentX + (contentWidth - QR_SIZE) / 2;
+      const qrY = qrSectionY + QR_TOP_PAD + 14;
 
-      // QR code dimensions and positioning
-      const qrSize = 160;
-      const qrX = contentX + (contentWidth - qrSize) / 2;
-      const qrY = contentY + 24;
+      drawRoundedRect(doc, qrX - 10, qrY - 10, QR_SIZE + 20, QR_SIZE + 20, 8, COLORS.white, '#EEEEEE');
+      doc.image(qrBuffer, qrX, qrY, { width: QR_SIZE, height: QR_SIZE });
+      doc.link(qrX - 10, qrY - 10, QR_SIZE + 20, QR_SIZE + 20, verifyUrl);
 
-      // White card behind QR (shadow effect)
-      drawRoundedRect(
-        doc,
-        qrX - 12,
-        qrY - 12,
-        qrSize + 24,
-        qrSize + 24,
-        10,
-        COLORS.white,
-        '#EEEEEE'
-      );
+      const labelY = qrY + QR_SIZE + QR_LABEL_GAP;
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.textDark)
+        .text('Scan with your mobile device', contentX, labelY, { width: contentWidth, align: 'center' });
+      doc.font('Helvetica').fontSize(9.5).fillColor(COLORS.textMuted)
+        .text('Opens the verification page on your phone', contentX, labelY + 16, {
+          width: contentWidth,
+          align: 'center',
+        });
 
-      // Embed QR code PNG image
-      doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
-
-      // --- CLICKABLE LINK ON QR CODE ---
-      // Covers the white card area around QR
-      doc.link(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, verifyUrl);
-
-      // QR Labels below the code
-      const labelY = qrY + qrSize + 28;
-
-      // "Scan to Verify" - bold heading
-      doc.font('Helvetica-Bold')
-         .fontSize(13)
-         .fillColor(COLORS.textDark)
-         .text('Scan to Verify', contentX, labelY, { width: contentWidth, align: 'center' });
-
-      // "Scan with your mobile device"
-      doc.font('Helvetica')
-         .fontSize(11)
-         .fillColor(COLORS.textLight)
-         .text(
-           'Scan with your mobile device',
-           contentX,
-           labelY + 22,
-           { width: contentWidth, align: 'center' }
-         );
-
-      // "Opens the verification page on your phone"
-      doc.font('Helvetica')
-         .fontSize(10)
-         .fillColor(COLORS.textMuted)
-         .text(
-           'Opens the verification page on your phone',
-           contentX,
-           labelY + 40,
-           { width: contentWidth, align: 'center' }
-         );
-
-      contentY += qrSectionHeight + 24;
+      y = qrSectionY + QR_SECTION_H + GAP_6;
 
       // ============================================================
-      // 11. WARNING TEXT (Red, centered)
+      // WARNING BOX
       // ============================================================
-      doc.font('Helvetica-Bold')
-         .fontSize(11)
-         .fillColor(COLORS.red)
-         .text(
-           'Failure to complete verification, will lead to closure of your account',
-           contentX,
-           contentY,
-           { width: contentWidth, align: 'center' }
-         );
+      drawRoundedRect(doc, contentX, y, contentWidth, WARNING_H, 8, COLORS.bgLight, null);
+      doc.font('Helvetica-Bold').fontSize(10.5).fillColor(COLORS.red)
+        .text('Failure to complete verification will lead to closure of your account.', contentX + 16, y + 12, {
+          width: contentWidth - 32,
+          align: 'center',
+        });
+      y += WARNING_H + GAP_7;
 
       // ============================================================
-      // 12. FOOTER SECTION
+      // FOOTER
       // ============================================================
-      const footerY = currentY + cardHeight - 50;
+      drawLine(doc, contentX, y, contentX + contentWidth, COLORS.border);
+      doc.font('Helvetica').fontSize(9.5).fillColor(COLORS.textMuted)
+        .text('Privacy policy   •   Security   •   Support', contentX, y + 14, {
+          width: contentWidth,
+          align: 'center',
+        });
+      doc.font('Helvetica').fontSize(9).fillColor(COLORS.textMuted)
+        .text('© 2026 mweb. All rights reserved.', contentX, y + 30, {
+          width: contentWidth,
+          align: 'center',
+        });
 
-      // Footer top divider
-      drawLine(doc, cardX + 28, footerY, cardX + cardWidth - 28, COLORS.border);
-
-      // Footer text: "Privacy policy • Security • Support ©2026 Mweb. All rights reserved"
-      doc.font('Helvetica')
-         .fontSize(10)
-         .fillColor('#AAAAAA')
-         .text(
-           'Privacy policy • Security • Support ©2026 Mweb. All rights reserved',
-           cardX,
-           footerY + 16,
-           { width: cardWidth, align: 'center' }
-         );
-
-      // ============================================================
-      // 13. FINALIZE PDF
-      // ============================================================
       doc.end();
-
     } catch (error) {
       console.error('[PDF] Generation error:', error);
       reject(error);
