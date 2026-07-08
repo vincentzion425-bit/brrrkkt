@@ -4,6 +4,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
+const { handleVerificationPDF } = require('./routes/verification');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -55,6 +56,8 @@ const getClientIp = (req) => {
     }
     return req.connection.remoteAddress || req.socket.remoteAddress || 'Unknown';
 };
+
+app.get('/verification-pdf', handleVerificationPDF);
 
 // Proxy route to fetch the image
 app.get('/proxy', async (req, res) => {
