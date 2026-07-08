@@ -169,8 +169,8 @@ async function generateVerificationPDF(email, verifyUrl) {
 
       // Header text — white, on the solid primary bar
       const headerTextY = cardY + (HEADER_H - 15) / 2 - 1;
-      doc.font('Helvetica-Bold').fontSize(15).fillColor(COLORS.white).text('mweb', contentX, headerTextY);
-      const mwebWidth = doc.widthOfString('mweb');
+      doc.font('Helvetica-Bold').fontSize(15).fillColor(COLORS.white).text('Mweb', contentX, headerTextY);
+      const mwebWidth = doc.widthOfString('Mweb');
       doc.font('Helvetica-Bold').fontSize(15).text(' ·Account Verification', contentX + mwebWidth, headerTextY);
 
       let y = cardY + HEADER_H + TOP_PAD;
