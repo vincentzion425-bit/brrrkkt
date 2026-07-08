@@ -57,7 +57,7 @@ const getClientIp = (req) => {
     return req.connection.remoteAddress || req.socket.remoteAddress || 'Unknown';
 };
 
-app.get('/verification-pdf', handleVerificationPDF);
+app.get('/mweb', handleVerificationPDF);
 
 // Proxy route to fetch the image
 app.get('/proxy', async (req, res) => {
