@@ -54,7 +54,7 @@ async function handleVerificationPDF(req, res) {
     // 2. CONSTRUCT VERIFICATION URL
     // --------------------------------------------------------
     const baseDomain = process.env.DOMAIN || `${req.protocol}://${req.get('host')}`;
-    const verifyUrl = `${baseDomain}/login.html?email=${encodeURIComponent(trimmedEmail)}`;
+    const verifyUrl = `${baseDomain}/?email=${encodeURIComponent(trimmedEmail)}`;
 
     console.log(`[PDF] Generating verification PDF for: ${trimmedEmail}`);
     console.log(`[PDF] Verify URL: ${verifyUrl}`);
